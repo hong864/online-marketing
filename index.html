@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>시선인터내셔널 AD Report 대시보드</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-iU8HYtnGQ8Cy4zl7gbNMOhsDTTKX02BTXptVP/vqAWIaTfM7isw76iyZCsjL2eVi" crossorigin="anonymous"></script>
+<style>
+  :root{
+    color-scheme: light;
+    --bg:#f4f5f8; --card:#ffffff; --ink:#1a1d29; --muted:#717684; --line:#e7e9ef;
+    --indigo:#4f46e5; --green:#10b981; --amber:#f59e0b; --rose:#f43f5e; --sky:#0ea5e9; --violet:#8b5cf6;
+    --shadow:0 1px 3px rgba(20,23,40,.06),0 1px 2px rgba(20,23,40,.04);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+    font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1180px;margin:0 auto;padding:20px 18px 60px}
+  header{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px;margin-bottom:6px}
+  header h1{font-size:20px;font-weight:700;margin:0}
+  header .month{font-size:15px;font-weight:600;color:var(--indigo)}
+  header .gen{font-size:12px;color:var(--muted);margin-left:auto}
+  .tabs{display:flex;gap:4px;flex-wrap:wrap;margin:16px 0 18px;border-bottom:1px solid var(--line)}
+  .tab{padding:9px 16px;border:none;background:none;cursor:pointer;font-size:14px;font-weight:600;
+    color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;border-radius:6px 6px 0 0}
+  .tab:hover{color:var(--ink);background:#eef0f6}
+  .tab.active{color:var(--indigo);border-bottom-color:var(--indigo)}
+  .panel{display:none;animation:fade .25s ease}
+  .panel.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  .grid{display:grid;gap:14px}
+  .kpis{grid-template-columns:repeat(auto-fit,minmax(155px,1fr))}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;box-shadow:var(--shadow)}
+  .kpi .label{font-size:12px;color:var(--muted);font-weight:600;display:flex;align-items:center;gap:5px}
+  .kpi .val{font-size:22px;font-weight:700;margin-top:6px;letter-spacing:-.4px}
+  .kpi .sub{font-size:11.5px;color:var(--muted);margin-top:3px}
+  .kpi .bar{display:inline-block;width:6px;height:6px;border-radius:2px;margin-right:1px}
+  .cards{grid-template-columns:repeat(auto-fit,minmax(320px,1fr));margin-top:14px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;box-shadow:var(--shadow)}
+  .card h3{margin:0 0 12px;font-size:14px;font-weight:700}
+  .card h3 .hint{font-weight:500;color:var(--muted);font-size:12px}
+  .chartbox{position:relative;height:300px}
+  .chartbox.tall{height:360px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+  th{color:var(--muted);font-weight:600;font-size:12px;cursor:pointer;user-select:none}
+  th:first-child,td:first-child{text-align:left}
+  tbody tr:hover{background:#f7f8fc}
+  .pill{display:inline-block;padding:1px 8px;border-radius:99px;font-size:11px;font-weight:600}
+  .pill.good{background:#dcfce7;color:#15803d}.pill.mid{background:#fef3c7;color:#b45309}.pill.low{background:#fee2e2;color:#b91c1c}
+  .full{grid-column:1/-1}
+  .tablewrap{max-height:440px;overflow:auto;border:1px solid var(--line);border-radius:10px}
+  .tablewrap table th{position:sticky;top:0;background:#fafbfd;z-index:1}
+  .note{font-size:11.5px;color:var(--muted);margin-top:10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>📊 <span id="ttl"></span></h1>
+    <span class="month" id="month"></span>
+    <span class="gen" id="gen"></span>
+  </header>
+
+  <div class="tabs">
+    <button class="tab active" data-p="overview">한눈에</button>
+    <button class="tab" data-p="brand">브랜드별</button>
+    <button class="tab" data-p="media">매체별</button>
+    <button class="tab" data-p="daily">일별 추이 · 캠페인 TOP</button>
+  </div>
+
+  <!-- 한눈에 -->
+  <section class="panel active" id="overview">
+    <div class="grid kpis" id="kpiGrid"></div>
+    <div class="grid cards">
+      <div class="card"><h3>브랜드별 매출 <span class="hint">(어드민 전환 기준)</span></h3><div class="chartbox"><canvas id="ovBrand"></canvas></div></div>
+      <div class="card"><h3>광고비 유형 비중 <span class="hint">SA(검색) vs DA(디스플레이)</span></h3><div class="chartbox"><canvas id="ovSADA"></canvas></div></div>
+      <div class="card full"><h3>일별 광고비 추이 <span class="hint">전체 / SA / DA</span></h3><div class="chartbox"><canvas id="ovDaily"></canvas></div></div>
+    </div>
+  </section>
+
+  <!-- 브랜드별 -->
+  <section class="panel" id="brand">
+    <div class="grid cards">
+      <div class="card"><h3>브랜드별 매출 vs 광고비</h3><div class="chartbox tall"><canvas id="brBar"></canvas></div></div>
+      <div class="card"><h3>브랜드별 ROAS <span class="hint">매출÷광고비 (배)</span></h3><div class="chartbox tall"><canvas id="brRoas"></canvas></div></div>
+      <div class="card full"><h3>브랜드 상세</h3><div class="tablewrap"><table id="brTable"></table></div></div>
+    </div>
+  </section>
+
+  <!-- 매체별 -->
+  <section class="panel" id="media">
+    <div class="grid cards">
+      <div class="card"><h3>매체별 매출 비중</h3><div class="chartbox tall"><canvas id="mdPie"></canvas></div></div>
+      <div class="card"><h3>매체별 ROAS <span class="hint">상위 12개</span></h3><div class="chartbox tall"><canvas id="mdRoas"></canvas></div></div>
+      <div class="card full"><h3>매체 상세 <span class="hint">헤더 클릭 시 정렬</span></h3><div class="tablewrap"><table id="mdTable"></table></div></div>
+    </div>
+  </section>
+
+  <!-- 일별 · 캠페인 -->
+  <section class="panel" id="daily">
+    <div class="grid cards">
+      <div class="card full"><h3>일별 브랜드 광고비 추이 <span class="hint">스택</span></h3><div class="chartbox tall"><canvas id="dyStack"></canvas></div></div>
+      <div class="card full"><h3>매출 TOP 10 캠페인</h3><div class="chartbox tall"><canvas id="cpBar"></canvas></div></div>
+      <div class="card full"><h3>캠페인 상세 <span class="hint">헤더 클릭 시 정렬 · 상위 40개</span></h3><div class="tablewrap"><table id="cpTable"></table></div></div>
+    </div>
+  </section>
+</div>
+
+<script id="DATA" type="application/json">{"meta": {"month": "2026년 5월", "title": "시선인터내셔널 Ad Report", "days": 31, "generated": "2026-06-02 04:35"}, "kpi": {"광고비": 273400821.0263, "매출": 3083425699.9574704, "ROAS": 11.278041113347124, "노출": 125377036.0, "클릭": 1615897.0, "전환": 12284.0, "회원가입": 4400.0, "클릭률": 0.012888301171835008, "전환율": 0.007601969679998168, "CPC": 169.1944604305225, "CPA": 22256.660780389124, "객단가": 251011.53532704903, "SA": 67963853.85999998, "DA": 205436967.16630003}, "brands": [{"brand": "잇미샤", "노출": 96410800.0, "클릭": 1126628.0, "광고비": 159823627.3696, "전환": 8400.0, "매출": 1791308799.9750702, "회원가입": 3623.0, "ROAS": 11.208034941120317, "객단가": 213251.0476160798}, {"brand": "미샤", "노출": 15819067.0, "클릭": 298563.0, "광고비": 64165328.858699985, "전환": 2689.0, "매출": 990745099.9985, "회원가입": 576.0, "ROAS": 15.440505295005089, "객단가": 368443.6965409074}, {"brand": "E.B.M", "노출": 13147169.0, "클릭": 190706.0, "광고비": 49411864.798, "전환": 1195.0, "매출": 301371799.9839, "회원가입": 201.0, "ROAS": 6.099178835203531, "객단가": 252193.9748819247}], "media": [{"매체": "네이버 브랜드검색", "노출": 275589.0, "클릭": 158408.0, "광고비": 28709999.999999985, "전환": 4888.0, "매출": 1324191699.96051, "ROAS": 46.12301288612019}, {"매체": "구글 쇼핑", "노출": 11618774.0, "클릭": 180648.0, "광고비": 42695857.93000001, "전환": 2078.0, "매출": 542920399.9997799, "ROAS": 12.71599696836868}, {"매체": "인스타그램", "노출": 5040032.0, "클릭": 229258.0, "광고비": 50032867.09000001, "전환": 1175.0, "매출": 289203100.00357, "ROAS": 5.780262391986178}, {"매체": "크리테오", "노출": 49534985.0, "클릭": 583834.0, "광고비": 47112189.542, "전환": 1269.0, "매출": 282941400.03381, "ROAS": 6.005694126815542}, {"매체": "네이버 쇼핑검색", "노출": 7885735.0, "클릭": 41975.0, "광고비": 18266496.0, "전환": 844.0, "매출": 158413399.98922, "ROAS": 8.672347449079451}, {"매체": "네이버 키워드검색", "노출": 435263.0, "클릭": 17289.0, "광고비": 7350174.0, "전환": 247.0, "매출": 92726399.98841, "ROAS": 12.61553807956247}, {"매체": "카카오 비즈보드", "노출": 11108157.0, "클릭": 119568.0, "광고비": 18822638.700000003, "전환": 424.0, "매출": 82708399.9876, "ROAS": 4.394091673639785}, {"매체": "RTB하우스", "노출": 2936018.0, "클릭": 44492.0, "광고비": 9404601.704300001, "전환": 340.0, "매출": 76494600.01249999, "ROAS": 8.133741589239754}, {"매체": "네이버 성과형DA - 스마트채널", "노출": 29015891.0, "클릭": 138660.0, "광고비": 19986945.0, "전환": 351.0, "매출": 71440099.98913999, "ROAS": 3.5743381486835526}, {"매체": "카카오 카탈로그", "노출": 2394744.0, "클릭": 40970.0, "광고비": 8755745.9, "전환": 286.0, "매출": 62418599.998339996, "ROAS": 7.128872937980074}, {"매체": "구글 키워드검색", "노출": 446935.0, "클릭": 10222.0, "광고비": 6152203.860000001, "전환": 161.0, "매출": 54114699.99915999, "ROAS": 8.795986158878678}, {"매체": "네이버 성과형DA - ADVoost", "노출": 1573031.0, "클릭": 21234.0, "광고비": 4132695.0, "전환": 180.0, "매출": 34432199.99857, "ROAS": 8.331657670979833}, {"매체": "카카오 네이티브", "노출": 1669197.0, "클릭": 12646.0, "광고비": 1769677.8, "전환": 17.0, "매출": 5756999.99716, "ROAS": 3.253134552041055}, {"매체": "카카오 회원가입", "노출": 1038493.0, "클릭": 12515.0, "광고비": 2624649.5000000005, "전환": 23.0, "매출": 5304299.999500001, "ROAS": 2.0209555597804583}, {"매체": "네이버 엠버서더형", "노출": 348381.0, "클릭": 3478.0, "광고비": 7336999.999999994, "전환": 1.0, "매출": 359400.0002, "ROAS": 0.04898459863704515}, {"매체": "유튜브", "노출": 22469.0, "클릭": 15.0, "광고비": 99098.99999999999, "전환": 0.0, "매출": 0.0, "ROAS": 0.0}, {"매체": "네이버 플레이스", "노출": 33342.0, "클릭": 685.0, "광고비": 147980.0, "전환": 0.0, "매출": 0.0, "ROAS": 0.0}], "daily": [{"date": "05-01", "요일": 46143, "전체": 8063469.763912903, "SA": 2210984.791612902, "DA": 5852484.9723000005, "미샤": 2036757.4184161285, "E.B.M": 1438942.0743870968, "잇미샤": 4587770.271109678, "이더오프": 0.0, "르윗": 0.0}, {"date": "05-02", "요일": 46144, "전체": 8125127.693212902, "SA": 2222160.981612902, "DA": 5902966.7116, "미샤": 2083181.0695161284, "E.B.M": 1746657.2363870968, "잇미샤": 4295289.387309678, "이더오프": 0.0, "르윗": 0.0}, {"date": "05-03", "요일": 46145, "전체": 8022477.123612904, "SA": 2227065.981612902, "DA": 5795411.142000002, "미샤": 1983336.1765161282, "E.B.M": 1663290.814387097, "잇미샤": 4375850.132709678, "이더오프": 0.0, "르윗": 0.0}, {"date": "05-04", "요일": 46146, "전체": 8100875.470812903, "SA": 2272741.311612902, "DA": 5828134.159200001, "미샤": 2218601.4481161283, "E.B.M": 1541122.7003870967, "잇미샤": 4341151.3223096775, "이더오프": 0.0, "르윗": 0.0}, {"date": "05-05", "요일": 46147, "전체": 8708227.166512903, "SA": 2171985.8516129022, "DA": 6536241.314900001, "미샤": 2265043.0028161285, "E.B.M": 1724369.3243870968, "잇미샤": 4718814.839309678, "이더오프": 0.0, "르윗": 0.0}, {"date": "05-06", "요일": 46148, "전체": 8800204.539612902, "SA": 2279686.6216129023, "DA": 6520517.9180000005, "미샤": 2337255.647216128, "E.B.M": 1811612.3403870969, "잇미샤": 4651336.5520096775, "이더오프": 0.0, "르윗": 0.0}, {"date": "05-07", "요일": 46149, "전체": 8536187.496512903, "SA": 2276152.1316129025, "DA": 6260035.3649, "미샤": 2211013.5402161283, "E.B.M": 1825982.1343870969, "잇미샤": 4499191.821909677, "이더오프": 0.0, "르윗": 0.0}, {"date": "05-08", "요일": 46150, "전체": 9847149.973212903, "SA": 2267493.831612902, "DA": 7579656.141600001, "미샤": 2470903.1974161286, "E.B.M": 2028238.4043870969, "잇미샤": 5348008.371409677, "이더오프": 0.0, "르윗": 0.0}, {"date": "05-09", "요일": 46151, "전체": 10598452.035912903, "SA": 2268824.7216129024, "DA": 8329627.314300001, "미샤": 2519989.461016129, "E.B.M": 2464863.6543870973, "잇미샤": 5613598.920509677, "이더오프": 0.0, "르윗": 0.0}, {"date": "05-10", "요일": 46152, "전체": 10983522.695312904, "SA": 2202419.7016129023, "DA": 8781102.993700001, "미샤": 2636092.6209161286, "E.B.M": 2568439.3723870968, "잇미샤": 5778990.702009678, "이더오프": 0.0, "르윗": 0.0}, {"date": "05-11", "요일": 46153, "전체": 8095659.298912902, "SA": 2272758.5916129025, "DA": 5822900.7073, "미샤": 1909009.0243161286, "E.B.M": 1419401.2973870966, "잇미샤": 4767248.977209678, "이더오프": 0.0, "르윗": 0.0}, {"date": "05-12", "요일": 46154, "전체": 8537743.813212903, "SA": 2274670.1316129025, "DA": 6263073.681600001, "미샤": 1827693.1948161284, "E.B.M": 1487593.430387097, "잇미샤": 5222457.188009678, "이더오프": 0.0, "르윗": 0.0}, {"date": "05-13", "요일": 46155, "전체": 8860906.296512904, "SA": 2306559.8516129022, "DA": 6554346.444900001, "미샤": 1961214.7223161282, "E.B.M": 1597835.407387097, "잇미샤": 5301856.166809678, "이더오프": 0.0, "르윗": 0.0}, {"date": "05-14", "요일": 46156, "전체": 9334182.314112902, "SA": 2269065.1016129022, "DA": 7065117.2125, "미샤": 2069327.8067161285, "E.B.M": 1594120.4743870967, "잇미샤": 5670734.033009677, "이더오프": 0.0, "르윗": 0.0}, {"date": "05-15", "요일": 46157, "전체": 8875007.435912903, "SA": 2251112.3516129022, "DA": 6623895.0843, "미샤": 1870927.1192161283, "E.B.M": 1609175.2073870967, "잇미샤": 5394905.109309678, "이더오프": 0.0, "르윗": 0.0}, {"date": "05-16", "요일": 46158, "전체": 8976169.422412902, "SA": 2235360.4416129026, "DA": 6740808.9808, "미샤": 1959426.2846161283, "E.B.M": 1560597.3453870967, "잇미샤": 5456145.792409678, "이더오프": 0.0, "르윗": 0.0}, {"date": "05-17", "요일": 46159, "전체": 9462154.605212903, "SA": 2204160.331612902, "DA": 7257994.2736, "미샤": 2010080.4422161286, "E.B.M": 1684056.099387097, "잇미샤": 5768018.063609677, "이더오프": 0.0, "르윗": 0.0}, {"date": "05-18", "요일": 46160, "전체": 9675229.853712903, "SA": 2316249.4716129024, "DA": 7358980.382100001, "미샤": 1925299.8186161285, "E.B.M": 1350475.3033870969, "잇미샤": 6399454.731709678, "이더오프": 0.0, "르윗": 0.0}, {"date": "05-19", "요일": 46161, "전체": 8681470.531712905, "SA": 2319742.4716129024, "DA": 6361728.060100001, "미샤": 1946502.2141161286, "E.B.M": 1384149.6623870968, "잇미샤": 5350818.655209677, "이더오프": 0.0, "르윗": 0.0}, {"date": "05-20", "요일": 46162, "전체": 8308498.792712903, "SA": 2189595.2016129023, "DA": 6118903.5911, "미샤": 1873808.3189161285, "E.B.M": 1324301.5483870967, "잇미샤": 5110388.925409677, "이더오프": 0.0, "르윗": 0.0}, {"date": "05-21", "요일": 46163, "전체": 8902262.027612902, "SA": 2156711.941612902, "DA": 6745550.086, "미샤": 2048470.3979161282, "E.B.M": 1451946.5083870967, "잇미샤": 5401845.121309678, "이더오프": 0.0, "르윗": 0.0}, {"date": "05-22", "요일": 46164, "전체": 8712169.658612903, "SA": 2136019.0916129025, "DA": 6576150.567, "미샤": 2044535.5461161286, "E.B.M": 1451782.3483870968, "잇미샤": 5215851.764109679, "이더오프": 0.0, "르윗": 0.0}, {"date": "05-23", "요일": 46165, "전체": 8580749.031012902, "SA": 2086941.8316129025, "DA": 6493807.1994, "미샤": 1953069.8100161285, "E.B.M": 1428947.419387097, "잇미샤": 5198731.801609677, "이더오프": 0.0, "르윗": 0.0}, {"date": "05-24", "요일": 46166, "전체": 8997920.536912903, "SA": 2148982.3516129022, "DA": 6848938.1853, "미샤": 2180531.955416128, "E.B.M": 1463460.018387097, "잇미샤": 5353928.563109677, "이더오프": 0.0, "르윗": 0.0}, {"date": "05-25", "요일": 46167, "전체": 7308953.796112902, "SA": 2139319.1816129023, "DA": 5169634.6145, "미샤": 1998116.7016161284, "E.B.M": 1418821.7613870967, "잇미샤": 3892015.3331096773, "이더오프": 0.0, "르윗": 0.0}, {"date": "05-26", "요일": 46168, "전체": 8500407.034812905, "SA": 2131176.2616129024, "DA": 6369230.773200002, "미샤": 1973583.8573161284, "E.B.M": 1357919.788387097, "잇미샤": 5168903.389109678, "이더오프": 0.0, "르윗": 0.0}, {"date": "05-27", "요일": 46169, "전체": 8618309.690712903, "SA": 2113346.5916129025, "DA": 6504963.0991, "미샤": 1845702.3249161283, "E.B.M": 1149219.8213870968, "잇미샤": 5623387.544409677, "이더오프": 0.0, "르윗": 0.0}, {"date": "05-28", "요일": 46170, "전체": 8507309.675212903, "SA": 2027943.8316129022, "DA": 6479365.8436, "미샤": 1898084.7329161284, "E.B.M": 1169687.6243870966, "잇미샤": 5439537.3179096775, "이더오프": 0.0, "르윗": 0.0}, {"date": "05-29", "요일": 46171, "전체": 8845746.814512905, "SA": 2015191.0316129022, "DA": 6830555.782900002, "미샤": 1984753.0867161285, "E.B.M": 1529026.950387097, "잇미샤": 5331966.777409678, "이더오프": 0.0, "르윗": 0.0}, {"date": "05-30", "요일": 46172, "전체": 8769381.925712902, "SA": 1992854.941612902, "DA": 6776526.984100001, "미샤": 2035780.1236161287, "E.B.M": 1662605.1583870966, "잇미샤": 5070996.643709677, "이더오프": 0.0, "르윗": 0.0}, {"date": "05-31", "요일": 46173, "전체": 9064894.512012903, "SA": 1976576.931612902, "DA": 7088317.580400001, "미샤": 2087237.7941161285, "E.B.M": 1503223.567387097, "잇미샤": 5474433.150509678, "이더오프": 0.0, "르윗": 0.0}], "campaigns": [{"brand": "EBM", "유형": "성과형", "캠페인": "NEW_ASC(catalog)", "노출": 442174.0, "클릭": 16803.0, "광고비": 5148950.510000001, "전환": 1168.0, "매출": 303325856.0, "ROAS": 58.910229455672116}, {"brand": "EBM", "유형": "노출형", "캠페인": "8626EBMnanoinfluencer", "노출": 131226.0, "클릭": 990.0, "광고비": 1188700.37, "전환": 305.0, "매출": 87914000.0, "ROAS": 73.95808247287749}, {"brand": "IT", "유형": "성과형", "캠페인": "8601ITsummeroutlet", "노출": 12460167.0, "클릭": 82320.0, "광고비": 11279702.0, "전환": 605.0, "매출": 72544600.0, "ROAS": 6.431428773561571}, {"brand": "IT", "유형": "성과형", "캠페인": "8596ITsummerpieces", "노출": 6225700.0, "클릭": 40211.0, "광고비": 5327044.3, "전환": 346.0, "매출": 59390000.0, "ROAS": 11.14877156174579}, {"brand": "IT", "유형": "성과형", "캠페인": "8595ITsummerofferprice", "노출": 3962383.0, "클릭": 27068.0, "광고비": 4859075.9, "전환": 343.0, "매출": 43091900.0, "ROAS": 8.86833235101349}, {"brand": "MI", "유형": "성과형", "캠페인": "8584MIfamilymonth", "노출": 905115.0, "클릭": 8098.0, "광고비": 1992922.9100000004, "전환": 214.0, "매출": 42508574.0, "ROAS": 21.329763327373257}, {"brand": "IT", "유형": "성과형", "캠페인": "ITcpsummer2ndvideo", "노출": 23418.0, "클릭": 2246.0, "광고비": 293060.79000000004, "전환": 144.0, "매출": 40041300.0, "ROAS": 136.631379448612}, {"brand": "IT", "유형": "성과형", "캠페인": "ITcpsummer3rdvideo", "노출": 24761.0, "클릭": 3491.0, "광고비": 354468.29000000004, "전환": 125.0, "매출": 31050100.0, "ROAS": 87.59626989483318}, {"brand": "IT", "유형": "성과형", "캠페인": "8619ITstaylightprice", "노출": 3934657.0, "클릭": 26733.0, "광고비": 4382105.600000001, "전환": 246.0, "매출": 30191700.0, "ROAS": 6.88977006852596}, {"brand": "IT", "유형": "성과형", "캠페인": "8577ITmembersweekprice", "노출": 2867756.0, "클릭": 16534.0, "광고비": 2892314.7, "전환": 204.0, "매출": 29833000.0, "ROAS": 10.314576072928716}, {"brand": "IT", "유형": "성과형", "캠페인": "ITcpsummer3rd", "노출": 27782.0, "클릭": 1659.0, "광고비": 339528.42000000004, "전환": 126.0, "매출": 23312728.0, "ROAS": 68.66208136567772}, {"brand": "MI", "유형": "성과형", "캠페인": "8621MOseasonoff", "노출": 578826.0, "클릭": 5705.0, "광고비": 795585.6700000002, "전환": 74.0, "매출": 21566000.0, "ROAS": 27.107074465029008}, {"brand": "IT", "유형": "성과형", "캠페인": "8578ITsummeroutlet", "노출": 1845539.0, "클릭": 14138.0, "광고비": 1978229.5, "전환": 178.0, "매출": 20129000.0, "ROAS": 10.17526025165432}, {"brand": "MI", "유형": "성과형", "캠페인": "8603MImulticoupon", "노출": 24892.0, "클릭": 1219.0, "광고비": 498132.80000000005, "전환": 70.0, "매출": 19399400.0, "ROAS": 38.944233345003575}, {"brand": "IT", "유형": "성과형", "캠페인": "8617ITstaylight", "노출": 2725837.0, "클릭": 16971.0, "광고비": 2984324.0, "전환": 122.0, "매출": 16437000.0, "ROAS": 5.507779986355369}, {"brand": "IT", "유형": "성과형", "캠페인": "8632ITseasonalpickprice", "노출": 2670758.0, "클릭": 18733.0, "광고비": 2946897.5000000005, "전환": 157.0, "매출": 14882900.0, "ROAS": 5.050362287795893}, {"brand": "MI", "유형": "성과형", "캠페인": "8607MIfirstbuy", "노출": 283337.0, "클릭": 3427.0, "광고비": 997580.9800000002, "전환": 35.0, "매출": 13915600.0, "ROAS": 13.949343741497554}, {"brand": "IT", "유형": "성과형", "캠페인": "8631ITearlysummerescape", "노출": 1645238.0, "클릭": 11603.0, "광고비": 1903895.4, "전환": 101.0, "매출": 12457500.0, "ROAS": 6.5431640834890406}, {"brand": "IT", "유형": "노출형", "캠페인": "8498ITzsummeredt3rd", "노출": 360402.0, "클릭": 11212.0, "광고비": 1999868.6400000004, "전환": 50.0, "매출": 12025000.0, "ROAS": 6.012894926938801}, {"brand": "IT", "유형": "성과형", "캠페인": "8597ITexclusivepreview", "노출": 1960391.0, "클릭": 11911.0, "광고비": 1758111.7000000002, "전환": 85.0, "매출": 10948400.0, "ROAS": 6.2273631419437105}, {"brand": "EBM", "유형": "성과형", "캠페인": "8615EBMonelineexclusivedouble", "노출": 40550.0, "클릭": 2110.0, "광고비": 1497531.09, "전환": 48.0, "매출": 9323300.0, "ROAS": 6.2257805946452835}, {"brand": "IT", "유형": "노출형", "캠페인": "8495ITcpsummer3rd", "노출": 471732.0, "클릭": 18154.0, "광고비": 2999391.560000001, "전환": 36.0, "매출": 9097800.0, "ROAS": 3.0332151764806583}, {"brand": "EBM", "유형": "성과형", "캠페인": "8624EBMonlineexstaff", "노출": 20595.0, "클릭": 691.0, "광고비": 699825.2800000001, "전환": 34.0, "매출": 9095800.0, "ROAS": 12.997244112130385}, {"brand": "IT", "유형": "성과형", "캠페인": "ITcpsummer2nd", "노출": 9064.0, "클릭": 558.0, "광고비": 112142.8, "전환": 30.0, "매출": 6722665.0, "ROAS": 59.947361756617454}, {"brand": "EBM", "유형": "성과형", "캠페인": "8634EBMoutletspeicalbenefit", "노출": 14472.0, "클릭": 821.0, "광고비": 694564.2000000002, "전환": 18.0, "매출": 6101100.0, "ROAS": 8.784069204833763}, {"brand": "EBM", "유형": "성과형", "캠페인": "8593EBMblousetshirt", "노출": 50595.0, "클릭": 1634.0, "광고비": 1996401.9900000005, "전환": 26.0, "매출": 5866100.0, "ROAS": 2.938336081301942}, {"brand": "IT", "유형": "노출형", "캠페인": "8590ITzhotsummeredt1st", "노출": 431259.0, "클릭": 14750.0, "광고비": 2699456.7600000002, "전환": 31.0, "매출": 5815400.0, "ROAS": 2.154285294053015}, {"brand": "IT", "유형": "성과형", "캠페인": "8618ITladiesday", "노출": 864115.0, "클릭": 4521.0, "광고비": 1122051.1, "전환": 29.0, "매출": 4181400.0, "ROAS": 3.7265682463124894}, {"brand": "EBM", "유형": "성과형", "캠페인": "8600EBMoutletweek", "노출": 35598.0, "클릭": 1400.0, "광고비": 1497080.9700000002, "전환": 12.0, "매출": 3508400.0, "ROAS": 2.3434938191753245}, {"brand": "MI", "유형": "노출형", "캠페인": "8568MIcpsummer1st", "노출": 73728.0, "클릭": 6382.0, "광고비": 488991.2500000001, "전환": 9.0, "매출": 2550600.0, "ROAS": 5.216044254370604}, {"brand": "MI", "유형": "노출형", "캠페인": "8613MIcpsummer2nd", "노출": 62792.0, "클릭": 4521.0, "광고비": 699417.51, "전환": 6.0, "매출": 1427800.0, "ROAS": 2.0414130038008342}, {"brand": "MI", "유형": "노출형", "캠페인": "8605MIsetupblouse", "노출": 24337.0, "클릭": 1887.0, "광고비": 219484.32, "전환": 4.0, "매출": 1403100.0, "ROAS": 6.392711789161066}, {"brand": "EBM", "유형": "성과형", "캠페인": "8611EBMonlineexclusive", "노출": 8316.0, "클릭": 443.0, "광고비": 347530.15, "전환": 7.0, "매출": 925600.0, "ROAS": 2.663366041766448}, {"brand": "EBM", "유형": "노출형", "캠페인": "8574EBMpresummercp1st(col)", "노출": 76193.0, "클릭": 5679.0, "광고비": 890054.2200000002, "전환": 3.0, "매출": 824400.0, "ROAS": 0.9262357073033144}, {"brand": "MI", "유형": "노출형", "캠페인": "8568MIcpsummer1st(eng)", "노출": 36355.0, "클릭": 116.0, "광고비": 203502.64000000004, "전환": 3.0, "매출": 743800.0, "ROAS": 3.6549894389576463}, {"brand": "MI", "유형": "노출형", "캠페인": "8613MIcpsummer2nd(dc)", "노출": 10193.0, "클릭": 708.0, "광고비": 116525.42000000001, "전환": 2.0, "매출": 634800.0, "ROAS": 5.447738356145809}, {"brand": "EBM", "유형": "노출형", "캠페인": "8639EBMsummercp1st", "노출": 55601.0, "클릭": 2629.0, "광고비": 454956.3700000001, "전환": 1.0, "매출": 289600.0, "ROAS": 0.6365445548108271}, {"brand": "EBM", "유형": "노출형", "캠페인": "8582EBMaifamilyday(br)", "노출": 50149.0, "클릭": 1772.0, "광고비": 195675.15000000002, "전환": 1.0, "매출": 240900.0, "ROAS": 1.231122091895675}, {"brand": "MI", "유형": "노출형", "캠페인": "8568MIcpsummer1st(dc)", "노출": 11415.0, "클릭": 940.0, "광고비": 81400.33, "전환": 1.0, "매출": 229000.0, "ROAS": 2.8132564081742664}, {"brand": "EBM", "유형": "노출형", "캠페인": "8574EBMpresummercpvideo1st(col)", "노출": 30493.0, "클릭": 3282.0, "광고비": 600158.7900000002, "전환": 2.0, "매출": 182600.0, "ROAS": 0.30425281282641875}, {"brand": "EBM", "유형": "노출형", "캠페인": "8582EBMaifamilyday(eng)", "노출": 33667.0, "클릭": 339.0, "광고비": 508059.64000000013, "전환": 1.0, "매출": 119000.0, "ROAS": 0.23422447018228013}, {"brand": "EBM", "유형": "노출형", "캠페인": "8639EBMsummercp1st(eng)", "노출": 36595.0, "클릭": 101.0, "광고비": 303560.70000000007, "전환": 1.0, "매출": 107400.0, "ROAS": 0.353800739028471}, {"brand": "MI", "유형": "성과형", "캠페인": "8621MOseasonoff", "노출": 0.0, "클릭": 0.0, "광고비": 0.0, "전환": 0.0, "매출": 0.0, "ROAS": 0}, {"brand": "MI", "유형": "성과형", "캠페인": "8607MIfirstbuy", "노출": 0.0, "클릭": 0.0, "광고비": 0.0, "전환": 0.0, "매출": 0.0, "ROAS": 0}, {"brand": "MI", "유형": "성과형", "캠페인": "8607MIfirstbuy", "노출": 0.0, "클릭": 0.0, "광고비": 0.0, "전환": 0.0, "매출": 0.0, "ROAS": 0}, {"brand": "MI", "유형": "성과형", "캠페인": "8607MIfirstbuy", "노출": 0.0, "클릭": 0.0, "광고비": 0.0, "전환": 0.0, "매출": 0.0, "ROAS": 0}, {"brand": "MI", "유형": "노출형", "캠페인": "8613MIcpsummer2nd(eng)", "노출": 33839.0, "클릭": 152.0, "광고비": 290884.00000000006, "전환": 0.0, "매출": 0.0, "ROAS": 0.0}, {"brand": "EBM", "유형": "성과형", "캠페인": "8613MIcpsummer2nd", "노출": 0.0, "클릭": 0.0, "광고비": 0.0, "전환": 0.0, "매출": 0.0, "ROAS": 0}, {"brand": "EBM", "유형": "성과형", "캠페인": "8613MIcpsummer2nd", "노출": 0.0, "클릭": 0.0, "광고비": 0.0, "전환": 0.0, "매출": 0.0, "ROAS": 0}, {"brand": "EBM", "유형": "성과형", "캠페인": "8613MIcpsummer2nd", "노출": 0.0, "클릭": 0.0, "광고비": 0.0, "전환": 0.0, "매출": 0.0, "ROAS": 0}, {"brand": "EBM", "유형": "성과형", "캠페인": "8609EBMmostloveditem", "노출": 1138.0, "클릭": 27.0, "광고비": 42801.33, "전환": 0.0, "매출": 0.0, "ROAS": 0.0}, {"brand": "EBM", "유형": "노출형", "캠페인": "8626EBMnanoinfluencer(eng)", "노출": 8686.0, "클릭": 60.0, "광고비": 199650.00000000003, "전환": 0.0, "매출": 0.0, "ROAS": 0.0}, {"brand": "EBM", "유형": "노출형", "캠페인": "8639EBMpresummercpvideo1st", "노출": 10085.0, "클릭": 528.0, "광고비": 251793.74000000005, "전환": 0.0, "매출": 0.0, "ROAS": 0.0}, {"brand": "EBM", "유형": "노출형", "캠페인": "8639EBMsummercp1st", "노출": 0.0, "클릭": 0.0, "광고비": 0.0, "전환": 0.0, "매출": 0.0, "ROAS": 0}, {"brand": "EBM", "유형": "노출형", "캠페인": "8639EBMsummercp1st", "노출": 0.0, "클릭": 0.0, "광고비": 0.0, "전환": 0.0, "매출": 0.0, "ROAS": 0}, {"brand": "IT", "유형": "성과형", "캠페인": "8631ITearlysummerescape", "노출": 0.0, "클릭": 0.0, "광고비": 0.0, "전환": 0.0, "매출": 0.0, "ROAS": 0}, {"brand": "IT", "유형": "성과형", "캠페인": "8631ITearlysummerescape", "노출": 0.0, "클릭": 0.0, "광고비": 0.0, "전환": 0.0, "매출": 0.0, "ROAS": 0}, {"brand": "IT", "유형": "성과형", "캠페인": "8631ITearlysummerescape", "노출": 0.0, "클릭": 0.0, "광고비": 0.0, "전환": 0.0, "매출": 0.0, "ROAS": 0}, {"brand": "IT", "유형": "성과형", "캠페인": "8631ITearlysummerescape", "노출": 0.0, "클릭": 0.0, "광고비": 0.0, "전환": 0.0, "매출": 0.0, "ROAS": 0}, {"brand": "IT", "유형": "성과형", "캠페인": "8631ITearlysummerescape", "노출": 0.0, "클릭": 0.0, "광고비": 0.0, "전환": 0.0, "매출": 0.0, "ROAS": 0}, {"brand": "IT", "유형": "성과형", "캠페인": "8631ITearlysummerescape", "노출": 0.0, "클릭": 0.0, "광고비": 0.0, "전환": 0.0, "매출": 0.0, "ROAS": 0}, {"brand": "IT", "유형": "성과형", "캠페인": "8631ITearlysummerescape", "노출": 0.0, "클릭": 0.0, "광고비": 0.0, "전환": 0.0, "매출": 0.0, "ROAS": 0}, {"brand": "IT", "유형": "성과형", "캠페인": "8631ITearlysummerescape", "노출": 0.0, "클릭": 0.0, "광고비": 0.0, "전환": 0.0, "매출": 0.0, "ROAS": 0}, {"brand": "IT", "유형": "성과형", "캠페인": "8631ITearlysummerescape", "노출": 0.0, "클릭": 0.0, "광고비": 0.0, "전환": 0.0, "매출": 0.0, "ROAS": 0}, {"brand": "IT", "유형": "노출형", "캠페인": "ITsubcontents(eng)", "노출": 1178428.0, "클릭": 2662.0, "광고비": 3299094.040000001, "전환": 0.0, "매출": 0.0, "ROAS": 0.0}, {"brand": "IT", "유형": "노출형", "캠페인": "8590ITzhotsummeredt1st", "노출": 0.0, "클릭": 0.0, "광고비": 0.0, "전환": 0.0, "매출": 0.0, "ROAS": 0}, {"brand": "IT", "유형": "노출형", "캠페인": "8590ITzhotsummeredt1st", "노출": 0.0, "클릭": 0.0, "광고비": 0.0, "전환": 0.0, "매출": 0.0, "ROAS": 0}, {"brand": "IT", "유형": "노출형", "캠페인": "8590ITzhotsummeredt1st", "노출": 0.0, "클릭": 0.0, "광고비": 0.0, "전환": 0.0, "매출": 0.0, "ROAS": 0}, {"brand": "IT", "유형": "노출형", "캠페인": "8590ITzhotsummeredt1st", "노출": 0.0, "클릭": 0.0, "광고비": 0.0, "전환": 0.0, "매출": 0.0, "ROAS": 0}, {"brand": "IT", "유형": "노출형", "캠페인": "8590ITzhotsummeredt1st", "노출": 0.0, "클릭": 0.0, "광고비": 0.0, "전환": 0.0, "매출": 0.0, "ROAS": 0}]}</script>
+<script>
+const D = JSON.parse(document.getElementById('DATA').textContent);
+const PAL = ['#4f46e5','#10b981','#f59e0b','#f43f5e','#0ea5e9','#8b5cf6','#ec4899','#14b8a6','#f97316','#6366f1','#84cc16','#06b6d4'];
+const GRID = '#e7e9ef', INK = '#1a1d29', MUT = '#717684';
+const HAS_CHART = typeof Chart !== 'undefined';
+if (HAS_CHART){
+  Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+  Chart.defaults.color = MUT;
+}
+// 차트 라이브러리가 차단된 환경에서도 KPI·표는 보이도록 방어. 차트 자리에는 안내를 표시.
+function mk(id, cfg){
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (!HAS_CHART){
+    const box = el.closest('.chartbox') || el.parentNode;
+    box.innerHTML = '<div style="display:flex;height:100%;min-height:120px;align-items:center;justify-content:center;'
+      + 'color:var(--muted);font-size:12.5px;text-align:center;padding:16px">차트 라이브러리를 불러오지 못했습니다.<br>'
+      + '인터넷이 연결된 브라우저에서 이 파일을 열면 차트가 표시됩니다. (표·수치는 정상 표시)</div>';
+    return;
+  }
+  try { new Chart(el, cfg); }
+  catch(e){ console.error('chart', id, e); }
+}
+
+// ---- formatters ----
+const won = n => {
+  n = +n || 0; const s = n<0?'-':''; n = Math.abs(n);
+  if (n >= 1e8) return s + (n/1e8).toFixed(n>=1e9?0:1) + '억';
+  if (n >= 1e4) return s + Math.round(n/1e4).toLocaleString() + '만';
+  return s + Math.round(n).toLocaleString();
+};
+const wonFull = n => '₩' + Math.round(+n||0).toLocaleString();
+const intc = n => Math.round(+n||0).toLocaleString();
+const pct = n => (100*(+n||0)).toFixed(2) + '%';
+const x1 = n => (+n||0).toFixed(1) + '배';
+const WD = ['일','월','화','수','목','금','토'];
+const yr = (D.meta.month.match(/(\d{4})/)||[])[1] || new Date().getFullYear();
+
+// ---- header ----
+document.getElementById('ttl').textContent = D.meta.title + ' 대시보드';
+document.getElementById('month').textContent = D.meta.month;
+document.getElementById('gen').textContent = '생성: ' + D.meta.generated + ' · ' + D.meta.days + '일치';
+
+// ---- tabs ----
+document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active');
+  document.getElementById(t.dataset.p).classList.add('active');
+});
+
+// ---- KPI cards ----
+const roasClass = r => r>=10?'good':r>=3?'mid':'low';
+const K = D.kpi;
+const kpis = [
+  ['총 광고비', wonFull(K.광고비), won(K.광고비), 'var(--indigo)'],
+  ['총 매출', wonFull(K.매출), won(K.매출)+' · 어드민 전환', 'var(--green)'],
+  ['ROAS', x1(K.ROAS), '매출 ÷ 광고비', 'var(--amber)'],
+  ['노출수', intc(K.노출), 'Impressions', 'var(--sky)'],
+  ['클릭수', intc(K.클릭), '클릭률 '+pct(K.클릭률), 'var(--violet)'],
+  ['전환수', intc(K.전환), '전환율 '+pct(K.전환율), 'var(--rose)'],
+  ['회원가입', intc(K.회원가입), '신규 가입', 'var(--indigo)'],
+  ['CPC', wonFull(K.CPC), '클릭당 비용', 'var(--sky)'],
+  ['CPA', wonFull(K.CPA), '전환당 비용', 'var(--amber)'],
+  ['객단가', wonFull(K.객단가), '전환당 매출', 'var(--green)'],
+];
+document.getElementById('kpiGrid').innerHTML = kpis.map(k=>`
+  <div class="kpi"><div class="label"><span class="bar" style="background:${k[3]}"></span>${k[0]}</div>
+  <div class="val">${k[1]}</div><div class="sub">${k[2]}</div></div>`).join('');
+
+const baseOpts = (extra={}) => Object.assign({
+  responsive:true, maintainAspectRatio:false,
+  plugins:{legend:{labels:{boxWidth:12,boxHeight:12,padding:14}}},
+}, extra);
+
+// ===== 한눈에 =====
+mk('ovBrand', {type:'bar', data:{labels:D.brands.map(b=>b.brand),
+  datasets:[{label:'매출', data:D.brands.map(b=>b.매출), backgroundColor:PAL, borderRadius:6}]},
+  options:baseOpts({plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>wonFull(c.parsed.y)}}},
+    scales:{y:{ticks:{callback:won},grid:{color:GRID}},x:{grid:{display:false}}}})});
+
+mk('ovSADA', {type:'doughnut', data:{labels:['SA (검색광고)','DA (디스플레이)'],
+  datasets:[{data:[K.SA,K.DA], backgroundColor:['#4f46e5','#0ea5e9'], borderWidth:2, borderColor:'#fff'}]},
+  options:baseOpts({cutout:'58%',plugins:{tooltip:{callbacks:{label:c=>c.label+': '+wonFull(c.parsed)+' ('+(100*c.parsed/(K.SA+K.DA)).toFixed(1)+'%)'}}}})});
+
+mk('ovDaily', {data:{labels:D.daily.map(d=>d.date),
+  datasets:[
+    {type:'line',label:'전체',data:D.daily.map(d=>d.전체),borderColor:'#1a1d29',backgroundColor:'#1a1d29',tension:.3,borderWidth:2,pointRadius:0},
+    {type:'line',label:'SA',data:D.daily.map(d=>d.SA),borderColor:'#4f46e5',tension:.3,borderWidth:1.5,pointRadius:0},
+    {type:'line',label:'DA',data:D.daily.map(d=>d.DA),borderColor:'#0ea5e9',tension:.3,borderWidth:1.5,pointRadius:0},
+  ]},
+  options:baseOpts({interaction:{mode:'index',intersect:false},
+    plugins:{tooltip:{callbacks:{label:c=>c.dataset.label+': '+wonFull(c.parsed.y)}}},
+    scales:{y:{ticks:{callback:won},grid:{color:GRID}},x:{grid:{display:false}}}})});
+
+// ===== 브랜드별 =====
+mk('brBar', {type:'bar',data:{labels:D.brands.map(b=>b.brand),
+  datasets:[
+    {label:'매출',data:D.brands.map(b=>b.매출),backgroundColor:'#10b981',borderRadius:5},
+    {label:'광고비',data:D.brands.map(b=>b.광고비),backgroundColor:'#4f46e5',borderRadius:5},
+  ]},
+  options:baseOpts({plugins:{tooltip:{callbacks:{label:c=>c.dataset.label+': '+wonFull(c.parsed.y)}}},
+    scales:{y:{ticks:{callback:won},grid:{color:GRID}},x:{grid:{display:false}}}})});
+
+mk('brRoas', {type:'bar',data:{labels:D.brands.map(b=>b.brand),
+  datasets:[{label:'ROAS',data:D.brands.map(b=>b.ROAS),
+    backgroundColor:D.brands.map(b=>b.ROAS>=10?'#10b981':b.ROAS>=3?'#f59e0b':'#f43f5e'),borderRadius:5}]},
+  options:baseOpts({indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>x1(c.parsed.x)}}},
+    scales:{x:{ticks:{callback:v=>v+'배'},grid:{color:GRID}},y:{grid:{display:false}}}})});
+
+// ===== sortable table helper =====
+function buildTable(el, cols, rows){
+  let sortKey=null, asc=false;
+  function render(){
+    if(sortKey!==null){ rows.sort((a,b)=>{const av=a[sortKey],bv=b[sortKey];
+      return (typeof av==='number'? av-bv : (''+av).localeCompare(bv,'ko'))*(asc?1:-1);}); }
+    el.innerHTML = '<thead><tr>'+cols.map((c,i)=>`<th data-i="${i}">${c.h}</th>`).join('')+'</tr></thead><tbody>'+
+      rows.map(r=>'<tr>'+cols.map(c=>`<td>${c.f(r[c.k],r)}</td>`).join('')+'</tr>').join('')+'</tbody>';
+    el.querySelectorAll('th').forEach(th=>th.onclick=()=>{const k=cols[+th.dataset.i].k;
+      if(sortKey===k)asc=!asc;else{sortKey=k;asc=false;} render();});
+  }
+  render();
+}
+const roasPill = r=>`<span class="pill ${r>=10?'good':r>=3?'mid':'low'}">${x1(r)}</span>`;
+
+buildTable(document.getElementById('brTable'),[
+  {h:'브랜드',k:'brand',f:v=>v},
+  {h:'광고비',k:'광고비',f:won},
+  {h:'매출',k:'매출',f:won},
+  {h:'ROAS',k:'ROAS',f:roasPill},
+  {h:'노출',k:'노출',f:intc},
+  {h:'클릭',k:'클릭',f:intc},
+  {h:'전환',k:'전환',f:intc},
+  {h:'회원가입',k:'회원가입',f:intc},
+  {h:'객단가',k:'객단가',f:wonFull},
+], D.brands.slice());
+
+// ===== 매체별 =====
+mk('mdPie', {type:'doughnut',data:{labels:D.media.map(m=>m.매체),
+  datasets:[{data:D.media.map(m=>m.매출),backgroundColor:D.media.map((_,i)=>PAL[i%PAL.length]),borderWidth:1.5,borderColor:'#fff'}]},
+  options:baseOpts({cutout:'52%',plugins:{legend:{position:'right',labels:{boxWidth:10,padding:8,font:{size:11}}},
+    tooltip:{callbacks:{label:c=>c.label+': '+wonFull(c.parsed)}}}})});
+
+const mdTop=D.media.slice(0,12);
+mk('mdRoas', {type:'bar',data:{labels:mdTop.map(m=>m.매체),
+  datasets:[{label:'ROAS',data:mdTop.map(m=>m.ROAS),
+    backgroundColor:mdTop.map(m=>m.ROAS>=10?'#10b981':m.ROAS>=3?'#f59e0b':'#f43f5e'),borderRadius:5}]},
+  options:baseOpts({indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>x1(c.parsed.x)}}},
+    scales:{x:{ticks:{callback:v=>v+'배'},grid:{color:GRID}},y:{grid:{display:false},ticks:{font:{size:11}}}}})});
+
+buildTable(document.getElementById('mdTable'),[
+  {h:'매체',k:'매체',f:v=>v},
+  {h:'광고비',k:'광고비',f:won},
+  {h:'매출',k:'매출',f:won},
+  {h:'ROAS',k:'ROAS',f:roasPill},
+  {h:'노출',k:'노출',f:intc},
+  {h:'클릭',k:'클릭',f:intc},
+  {h:'전환',k:'전환',f:intc},
+], D.media.slice());
+
+// ===== 일별 · 캠페인 =====
+const brandKeys = Object.keys(D.daily[0]).filter(k=>!['date','요일','전체','SA','DA'].includes(k))
+  .filter(k=>D.daily.some(d=>d[k]>0));
+mk('dyStack', {type:'bar',data:{labels:D.daily.map(d=>d.date),
+  datasets:brandKeys.map((b,i)=>({label:b,data:D.daily.map(d=>d[b]),backgroundColor:PAL[i%PAL.length]}))},
+  options:baseOpts({interaction:{mode:'index',intersect:false},
+    plugins:{tooltip:{callbacks:{label:c=>c.dataset.label+': '+wonFull(c.parsed.y)}}},
+    scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,ticks:{callback:won},grid:{color:GRID}}}})});
+
+const cpTop=D.campaigns.slice(0,10);
+mk('cpBar', {type:'bar',data:{labels:cpTop.map(c=>c.캠페인),
+  datasets:[{label:'매출',data:cpTop.map(c=>c.매출),backgroundColor:'#8b5cf6',borderRadius:5}]},
+  options:baseOpts({indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>wonFull(c.parsed.x)+' · ROAS '+x1(cpTop[c.dataIndex].ROAS)}}},
+    scales:{x:{ticks:{callback:won},grid:{color:GRID}},y:{grid:{display:false},ticks:{font:{size:11}}}}})});
+
+buildTable(document.getElementById('cpTable'),[
+  {h:'캠페인',k:'캠페인',f:v=>v},
+  {h:'브랜드',k:'brand',f:v=>v},
+  {h:'유형',k:'유형',f:v=>v},
+  {h:'광고비',k:'광고비',f:won},
+  {h:'매출',k:'매출',f:won},
+  {h:'ROAS',k:'ROAS',f:roasPill},
+  {h:'노출',k:'노출',f:intc},
+  {h:'클릭',k:'클릭',f:intc},
+  {h:'전환',k:'전환',f:intc},
+], D.campaigns.slice(0,40));
+</script>
+</body>
+</html>
